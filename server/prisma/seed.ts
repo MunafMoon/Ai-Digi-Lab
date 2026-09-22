@@ -34,8 +34,12 @@ async function main() {
       await prisma.comment.upsert({ where: { id: `${task.id.slice(0, 24)}comment1` }, update: {}, create: { id: `${task.id.slice(0, 24)}comment1`, taskId: task.id, authorId: owner.id, body: "Seeded discussion note for the project board." } });
     }
 
-    await prisma.activityLog.create({ data: { organizationId: org.id, userId: owner.id, action: "SEED_PHASE3_READY", entityType: "Project", entityId: project.id, newValue: { key, name, activeSprint: activeSprint.name, nextSprint: nextSprint.name } } });
+    await prisma.document.upsert({ where: { id: `${project.id.slice(0, 24)}doc001` }, update: {}, create: { id: `${project.id.slice(0, 24)}doc001`, organizationId: org.id, projectId: project.id, title: `${name} Requirements`, sourceType: "markdown", content: `# ${name} Requirements\n\nAuthentication must support email login and OAuth. Checkout flows should handle timeouts, retries, and clear refund policy notes.` } });
+    await prisma.notification.create({ data: { organizationId: org.id, userId: owner.id, type: "AI_RISK", title: `${key} delivery risk detected`, body: "AI found overdue or high-priority work that needs attention." } });
+    await prisma.activityLog.create({ data: { organizationId: org.id, userId: owner.id, action: "SEED_PHASE6_READY", entityType: "Project", entityId: project.id, newValue: { key, name, activeSprint: activeSprint.name, nextSprint: nextSprint.name } } });
   }
 }
 
 main().finally(async () => prisma.$disconnect());
+
+

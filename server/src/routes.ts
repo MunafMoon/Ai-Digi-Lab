@@ -6,6 +6,7 @@ import { prisma } from "./db.js";
 import { requireAuth, requireOrganization } from "./middleware.js";
 import { hasRole } from "./rbac.js";
 import { AIProvider, calculateProjectHealth, createProjectPlan, createRetrospective, createSprintSummary, createStandup, createTaskBreakdown, getPermittedWorkspaceContext, prioritizeTasks } from "./ai.js";
+import { buildProjectReport, searchItems, SearchItem } from "./phase6.js";
 
 export const router = Router();
 
@@ -479,3 +480,71 @@ router.post("/ai/retrospective", requireAuth, requireOrganization("VIEWER"), asy
     res.json({ sprint: { id: sprint.id, name: sprint.name }, retrospective });
   } catch (error) { next(error); }
 });
+
+
+const documentSchema = z.object({
+  projectId: z.string().uuid().optional(),
+  title: z.string().min(2).max(200),
+  content: z.string().max(50000).optional(),
+  sourceType: z.enum(["markdown", "txt", "pdf", "docx"]).default("markdown")
+});
+
+router.get("/organizations/:organizationId/documents", requireAuth, requireOrganization("VIEWER"), async (req, res) => {
+  const documents = await prisma.document.findMany({ where: { organizationId: req.membership!.organizationId }, include: { project: { select: { id: true, key: true, name: true } } }, orderBy: { updatedAt: "desc" } });
+  res.json({ documents });
+});
+
+router.post("/organizations/:organizationId/documents", requireAuth, requireOrganization("DEVELOPER"), async (req, res, next) => {
+  try {
+    const input = documentSchema.parse(req.body);
+    if (input.projectId && !(await requireProjectAccess(input.projectId, req.user!.id))) return res.status(404).json({ error: "Project not found" });
+    const document = await prisma.document.create({ data: { organizationId: req.membership!.organizationId, projectId: input.projectId, title: input.title, content: input.content, sourceType: input.sourceType } });
+    await writeActivity({ organizationId: req.membership!.organizationId, userId: req.user!.id, action: "DOCUMENT_CREATED", entityType: "Document", entityId: document.id, newValue: document as unknown as Prisma.InputJsonValue });
+    res.status(201).json({ document });
+  } catch (error) { next(error); }
+});
+
+router.get("/documents/:documentId", requireAuth, async (req, res) => {
+  const document = await prisma.document.findFirst({ where: { id: req.params.documentId, organization: { members: { some: { userId: req.user!.id } } } }, include: { project: { select: { id: true, key: true, name: true } } } });
+  if (!document) return res.status(404).json({ error: "Document not found" });
+  res.json({ document });
+});
+
+router.get("/organizations/:organizationId/search", requireAuth, requireOrganization("VIEWER"), async (req, res) => {
+  const query = z.string().min(1).max(200).parse(req.query.q);
+  const [projects, tasks, documents, comments, users] = await Promise.all([
+    prisma.project.findMany({ where: { organizationId: req.membership!.organizationId, status: { not: "ARCHIVED" } }, take: 50 }),
+    prisma.task.findMany({ where: { organizationId: req.membership!.organizationId }, take: 100 }),
+    prisma.document.findMany({ where: { organizationId: req.membership!.organizationId }, take: 100 }),
+    prisma.comment.findMany({ where: { task: { organizationId: req.membership!.organizationId } }, include: { task: { select: { taskKey: true, title: true } } }, take: 100 }),
+    prisma.organizationMember.findMany({ where: { organizationId: req.membership!.organizationId }, include: { user: true }, take: 50 })
+  ]);
+  const items: SearchItem[] = [
+    ...projects.map((project) => ({ type: "project", id: project.id, title: `${project.key} ${project.name}`, body: project.description })),
+    ...tasks.map((task) => ({ type: "task", id: task.id, title: `${task.taskKey} ${task.title}`, body: task.description })),
+    ...documents.map((document) => ({ type: "document", id: document.id, title: document.title, body: document.content })),
+    ...comments.map((comment) => ({ type: "comment", id: comment.id, title: `${comment.task.taskKey} comment`, body: comment.body })),
+    ...users.map((member) => ({ type: "user", id: member.user.id, title: member.user.name, body: member.user.email }))
+  ];
+  res.json({ query, results: searchItems(query, items).slice(0, 30), semantic: true });
+});
+
+router.get("/projects/:projectId/reports/summary", requireAuth, async (req, res) => {
+  const project = await requireProjectAccess(req.params.projectId, req.user!.id);
+  if (!project) return res.status(404).json({ error: "Project not found" });
+  const tasks = await prisma.task.findMany({ where: { projectId: project.id, organizationId: project.organizationId } });
+  res.json({ project: { id: project.id, key: project.key, name: project.name }, report: buildProjectReport(tasks) });
+});
+
+router.get("/organizations/:organizationId/notifications", requireAuth, requireOrganization("VIEWER"), async (req, res) => {
+  const notifications = await prisma.notification.findMany({ where: { organizationId: req.membership!.organizationId, userId: req.user!.id }, orderBy: { createdAt: "desc" }, take: 50 });
+  res.json({ notifications });
+});
+
+router.patch("/notifications/:notificationId/read", requireAuth, async (req, res) => {
+  const notification = await prisma.notification.findFirst({ where: { id: req.params.notificationId, userId: req.user!.id } });
+  if (!notification) return res.status(404).json({ error: "Notification not found" });
+  const updated = await prisma.notification.update({ where: { id: notification.id }, data: { readAt: new Date() } });
+  res.json({ notification: updated });
+});
+

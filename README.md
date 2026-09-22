@@ -91,3 +91,9 @@ AI provider settings use OPENAI_API_KEY, AI_BASE_URL, and AI_MODEL. Without an A
 - POST /api/ai/prioritize`n- POST /api/ai/project-health`n- POST /api/ai/standup`n- POST /api/ai/sprint-summary`n- POST /api/ai/retrospective`n
 Project health and prioritization use deterministic metrics first, then present AI-style explanations and editable recommendations. No important project data is silently changed.
 
+
+## Phase 6 API Highlights
+
+- GET /api/organizations/:organizationId/documents`n- POST /api/organizations/:organizationId/documents`n- GET /api/documents/:documentId`n- GET /api/organizations/:organizationId/search?q=...`n- GET /api/projects/:projectId/reports/summary`n- GET /api/organizations/:organizationId/notifications`n- PATCH /api/notifications/:notificationId/read`n
+Search currently combines deterministic keyword scoring with a semantic-ready response shape. Production RAG still needs embeddings and document chunk storage.
+
