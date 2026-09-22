@@ -1,24 +1,25 @@
-# Phase 7 Completion
+# Phase 8 Completion
 
-Status: Phase 7 billing architecture, AI usage controls, admin security, upload validation, and audit surfaces implemented.
+Status: Phase 8 landing page, onboarding, production readiness checks, performance budgets, deployment documentation, and final verification implemented.
 
 Completed:
 
-- Billing plan definitions with Stripe-ready price keys.
-- AI usage summary helper with monthly spend and request rollups.
-- AI budget and daily request limit gate.
-- Admin API for billing plans, AI usage, AI settings, security checklist, audit logs, and upload validation.
-- Security checklist helper covering tenant isolation, RBAC, audit logs, AI controls, secrets, and uploads.
-- Frontend Admin tab for plans, AI controls, security checklist, and audit trail.
-- Stripe environment placeholders added for the future checkout/webhook integration.
+- Public landing page as the first screen with product positioning, CTA, demo entry, and product preview.
+- Onboarding flow for workspace setup, team invite, first project, methodology selection, and dashboard entry.
+- Production readiness helper for required runtime configuration.
+- API readiness endpoint with database reachability check.
+- Production checks endpoint for runtime and performance budget status.
+- Organization onboarding API for first-run progress.
+- Phase 8 tests for runtime checks, onboarding steps, and performance budgets.
+- Deployment checklist documented for local Docker and production hosting.
 
 Verification performed:
 
-- `npm run test` passed: 7 files, 22 tests.
+- `npm run test` passed: 8 files, 26 tests.
 - `npm run typecheck` passed.
 
 Known follow-up:
 
-- Add real Stripe checkout sessions, subscription records, and webhook processing.
-- Enforce AI usage controls inside every AI endpoint before model execution.
-- Wire the Admin tab to live APIs with TanStack Query.
+- Wire onboarding forms to live mutation APIs instead of the local first-run flow.
+- Add E2E tests with Playwright once browser automation is configured.
+- Configure real production infrastructure secrets before using `/api/ready` as a deploy gate.

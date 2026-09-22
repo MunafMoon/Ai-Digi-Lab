@@ -108,3 +108,22 @@ Search currently combines deterministic keyword scoring with a semantic-ready re
 - POST /api/organizations/:organizationId/uploads/validate
 
 Billing is Stripe-ready through STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, and STRIPE_WEBHOOK_SECRET. Phase 7 adds AI budget controls and admin security visibility; live checkout and webhook persistence are the next backend step.
+
+## Phase 8 API Highlights
+
+- GET /api/ready
+- GET /api/production-checks
+- GET /api/organizations/:organizationId/onboarding
+
+Phase 8 adds the public landing page, first-run onboarding path, runtime production checks, and performance budget checks. `/api/ready` validates required runtime configuration and database reachability for deployment health checks.
+
+## Production Deployment Checklist
+
+1. Configure production environment variables from `.env.example`.
+2. Replace default JWT secrets with strong unique values.
+3. Set `DATABASE_URL`, `CORS_ORIGIN`, `AI_MODEL`, and storage settings for the target host.
+4. Run `npm install`, `npm run prisma:generate`, and `npm run build`.
+5. Run migrations with `npm run prisma:migrate` before first production traffic.
+6. Seed demo data only for demo environments with `npm run seed`.
+7. Use `/api/health` for process liveness and `/api/ready` for deployment readiness.
+8. For Docker local production testing, run `docker compose up --build`.

@@ -8,6 +8,7 @@ import { hasRole } from "./rbac.js";
 import { AIProvider, calculateProjectHealth, createProjectPlan, createRetrospective, createSprintSummary, createStandup, createTaskBreakdown, getPermittedWorkspaceContext, prioritizeTasks } from "./ai.js";
 import { buildProjectReport, searchItems, SearchItem } from "./phase6.js";
 import { billingPlans, canUseAi, redactSecret, securityChecklist, summarizeAiUsage, validateUpload } from "./phase7.js";
+import { getRuntimeChecks, onboardingSteps, performanceBudget } from "./phase8.js";
 
 export const router = Router();
 
@@ -41,6 +42,20 @@ async function writeActivity(input: { organizationId: string; userId: string; ac
 }
 
 router.get("/health", (_req, res) => res.json({ ok: true, service: "taskpilot-api" }));
+
+router.get("/ready", async (_req, res) => {
+  const runtime = getRuntimeChecks(process.env);
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return res.status(runtime.status === "ready" ? 200 : 503).json({ ...runtime, database: "reachable" });
+  } catch {
+    return res.status(503).json({ ...runtime, status: "not_ready", database: "unreachable" });
+  }
+});
+
+router.get("/production-checks", (_req, res) => {
+  res.json({ runtime: getRuntimeChecks(process.env), performance: performanceBudget({ jsKb: 573, cssKb: 12, apiP95Ms: 250 }) });
+});
 
 router.post("/auth/signup", async (req, res, next) => {
   try {
@@ -595,4 +610,12 @@ router.get("/organizations/:organizationId/audit-logs", requireAuth, requireOrga
 router.post("/organizations/:organizationId/uploads/validate", requireAuth, requireOrganization("DEVELOPER"), (req, res) => {
   const input = z.object({ fileName: z.string(), mimeType: z.string(), sizeBytes: z.number().int() }).parse(req.body);
   res.json({ upload: validateUpload(input) });
+});
+
+router.get("/organizations/:organizationId/onboarding", requireAuth, requireOrganization("VIEWER"), async (req, res) => {
+  const [projectCount, memberCount] = await Promise.all([
+    prisma.project.count({ where: { organizationId: req.membership!.organizationId } }),
+    prisma.organizationMember.count({ where: { organizationId: req.membership!.organizationId } })
+  ]);
+  res.json({ steps: onboardingSteps({ workspaceCreated: true, teamInvited: memberCount > 1, projectCreated: projectCount > 0, methodologySelected: projectCount > 0 }) });
 });
