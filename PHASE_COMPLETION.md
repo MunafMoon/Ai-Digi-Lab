@@ -1,27 +1,24 @@
-# Phase 6 Completion
+# Phase 7 Completion
 
-Status: Phase 6 documents, search, reports, and notifications foundation implemented.
+Status: Phase 7 billing architecture, AI usage controls, admin security, upload validation, and audit surfaces implemented.
 
 Completed:
 
-- Document list/create/detail APIs using organization-scoped access.
-- Global workspace search across projects, tasks, documents, comments, and users.
-- Lightweight semantic-style ranking helper with tests.
-- Project report summary API with completion, story point, bug, status, and assignee metrics.
-- Notification list and mark-read APIs.
-- Seed data expanded with markdown project requirements documents and AI risk notifications.
-- Frontend tabs for Documents, Reports, and Notifications.
-- Sidebar search preview for document/task discovery.
+- Billing plan definitions with Stripe-ready price keys.
+- AI usage summary helper with monthly spend and request rollups.
+- AI budget and daily request limit gate.
+- Admin API for billing plans, AI usage, AI settings, security checklist, audit logs, and upload validation.
+- Security checklist helper covering tenant isolation, RBAC, audit logs, AI controls, secrets, and uploads.
+- Frontend Admin tab for plans, AI controls, security checklist, and audit trail.
+- Stripe environment placeholders added for the future checkout/webhook integration.
 
 Verification performed:
 
-- `npx prisma generate --schema server/prisma/schema.prisma` passed.
-- `npm run test` passed: 6 files, 16 tests.
+- `npm run test` passed: 7 files, 22 tests.
 - `npm run typecheck` passed.
-- `npm run build` passed.
 
 Known follow-up:
 
-- Document uploads and real embedding storage are still needed for production RAG.
-- Frontend panels still use local demo data; wire to APIs with TanStack Query.
-- Email/Slack notification delivery providers are architecture-ready but not connected.
+- Add real Stripe checkout sessions, subscription records, and webhook processing.
+- Enforce AI usage controls inside every AI endpoint before model execution.
+- Wire the Admin tab to live APIs with TanStack Query.

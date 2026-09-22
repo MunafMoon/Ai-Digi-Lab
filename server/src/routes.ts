@@ -7,6 +7,7 @@ import { requireAuth, requireOrganization } from "./middleware.js";
 import { hasRole } from "./rbac.js";
 import { AIProvider, calculateProjectHealth, createProjectPlan, createRetrospective, createSprintSummary, createStandup, createTaskBreakdown, getPermittedWorkspaceContext, prioritizeTasks } from "./ai.js";
 import { buildProjectReport, searchItems, SearchItem } from "./phase6.js";
+import { billingPlans, canUseAi, redactSecret, securityChecklist, summarizeAiUsage, validateUpload } from "./phase7.js";
 
 export const router = Router();
 
@@ -548,3 +549,50 @@ router.patch("/notifications/:notificationId/read", requireAuth, async (req, res
   res.json({ notification: updated });
 });
 
+
+const aiSettingsSchema = z.object({
+  monthlyAiBudgetCents: z.number().int().min(0).max(10000000).optional(),
+  aiDailyRequestLimit: z.number().int().min(1).max(100000).optional()
+});
+
+router.get("/organizations/:organizationId/billing/plans", requireAuth, requireOrganization("VIEWER"), (_req, res) => {
+  res.json({ provider: "stripe-ready", plans: billingPlans, checkout: { enabled: Boolean(process.env.STRIPE_SECRET_KEY), publishableKeyConfigured: Boolean(process.env.STRIPE_PUBLISHABLE_KEY) } });
+});
+
+router.get("/organizations/:organizationId/ai/usage", requireAuth, requireOrganization("ADMIN"), async (req, res) => {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const [organization, monthlyUsage, dailyRequests] = await Promise.all([
+    prisma.organization.findUniqueOrThrow({ where: { id: req.membership!.organizationId } }),
+    prisma.aIUsage.findMany({ where: { organizationId: req.membership!.organizationId, createdAt: { gte: startOfMonth } }, orderBy: { createdAt: "desc" }, take: 500 }),
+    prisma.aIUsage.count({ where: { organizationId: req.membership!.organizationId, createdAt: { gte: startOfDay } } })
+  ]);
+  const summary = summarizeAiUsage(monthlyUsage);
+  const control = canUseAi({ monthlyBudgetCents: organization.monthlyAiBudgetCents, dailyRequestLimit: organization.aiDailyRequestLimit, monthlySpendCents: summary.estimatedCostCents, dailyRequests });
+  res.json({ period: { monthStart: startOfMonth, dayStart: startOfDay }, settings: { monthlyAiBudgetCents: organization.monthlyAiBudgetCents, aiDailyRequestLimit: organization.aiDailyRequestLimit }, control, summary, recentUsage: monthlyUsage.slice(0, 20) });
+});
+
+router.patch("/organizations/:organizationId/ai/settings", requireAuth, requireOrganization("ADMIN"), async (req, res, next) => {
+  try {
+    const input = aiSettingsSchema.parse(req.body);
+    const before = await prisma.organization.findUniqueOrThrow({ where: { id: req.membership!.organizationId } });
+    const organization = await prisma.organization.update({ where: { id: req.membership!.organizationId }, data: input });
+    await writeActivity({ organizationId: organization.id, userId: req.user!.id, action: "AI_SETTINGS_UPDATED", entityType: "Organization", entityId: organization.id, oldValue: { monthlyAiBudgetCents: before.monthlyAiBudgetCents, aiDailyRequestLimit: before.aiDailyRequestLimit }, newValue: input });
+    res.json({ organization: { id: organization.id, monthlyAiBudgetCents: organization.monthlyAiBudgetCents, aiDailyRequestLimit: organization.aiDailyRequestLimit } });
+  } catch (error) { next(error); }
+});
+
+router.get("/organizations/:organizationId/security/checklist", requireAuth, requireOrganization("ADMIN"), (_req, res) => {
+  res.json({ checklist: securityChecklist, environment: { stripeSecretKey: redactSecret(process.env.STRIPE_SECRET_KEY), jwtAccessSecret: redactSecret(process.env.JWT_ACCESS_SECRET), s3Bucket: process.env.S3_BUCKET ? "configured" : "not_configured" } });
+});
+
+router.get("/organizations/:organizationId/audit-logs", requireAuth, requireOrganization("ADMIN"), async (req, res) => {
+  const logs = await prisma.activityLog.findMany({ where: { organizationId: req.membership!.organizationId }, include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: "desc" }, take: 100 });
+  res.json({ logs });
+});
+
+router.post("/organizations/:organizationId/uploads/validate", requireAuth, requireOrganization("DEVELOPER"), (req, res) => {
+  const input = z.object({ fileName: z.string(), mimeType: z.string(), sizeBytes: z.number().int() }).parse(req.body);
+  res.json({ upload: validateUpload(input) });
+});

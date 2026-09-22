@@ -97,3 +97,14 @@ Project health and prioritization use deterministic metrics first, then present 
 - GET /api/organizations/:organizationId/documents`n- POST /api/organizations/:organizationId/documents`n- GET /api/documents/:documentId`n- GET /api/organizations/:organizationId/search?q=...`n- GET /api/projects/:projectId/reports/summary`n- GET /api/organizations/:organizationId/notifications`n- PATCH /api/notifications/:notificationId/read`n
 Search currently combines deterministic keyword scoring with a semantic-ready response shape. Production RAG still needs embeddings and document chunk storage.
 
+
+## Phase 7 API Highlights
+
+- GET /api/organizations/:organizationId/billing/plans
+- GET /api/organizations/:organizationId/ai/usage
+- PATCH /api/organizations/:organizationId/ai/settings
+- GET /api/organizations/:organizationId/security/checklist
+- GET /api/organizations/:organizationId/audit-logs
+- POST /api/organizations/:organizationId/uploads/validate
+
+Billing is Stripe-ready through STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, and STRIPE_WEBHOOK_SECRET. Phase 7 adds AI budget controls and admin security visibility; live checkout and webhook persistence are the next backend step.
