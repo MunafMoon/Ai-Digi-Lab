@@ -47,6 +47,79 @@ function Backlog({ tasks, moveToSprint, selectTask }: { tasks: Task[]; moveToSpr
 function Sprints({ tasks }: { tasks: Task[] }) { const complete = tasks.filter((task) => task.status === "Done").reduce((sum, task) => sum + task.points, 0); const total = tasks.reduce((sum, task) => sum + task.points, 0); return <section className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr]"><article className="rounded-md border border-slate-200 bg-white p-4"><h3 className="font-semibold">Sprint Alpha</h3><p className="mt-2 text-sm text-slate-600">Ship secure authentication and stabilize checkout.</p><p className="mt-4 text-2xl font-semibold">{complete}/{total} pts</p></article><article className="rounded-md border border-slate-200 bg-white p-4"><h3 className="font-semibold">Blocked tasks</h3><p className="mt-4 text-2xl font-semibold">1</p><p className="mt-2 text-sm text-slate-600">ECOM-2 needs OAuth credentials.</p></article><article className="rounded-md border border-slate-200 bg-white p-4"><h3 className="font-semibold">Velocity</h3><p className="mt-4 text-2xl font-semibold">21 pts</p><p className="mt-2 text-sm text-slate-600">Based on last completed sprint.</p></article></section>; }
 function Roadmap({ tasks }: { tasks: Task[] }) { return <section className="rounded-md border border-slate-200 bg-white p-4"><h3 className="font-semibold">Roadmap</h3><div className="mt-4 space-y-4">{epics.map((epic) => <div key={epic.name}><div className="flex items-center gap-2 text-sm font-medium"><GitBranch size={16} />{epic.name}<span className="text-slate-500">{epic.window}</span></div><div className="mt-2 h-3 rounded bg-slate-100"><div className={`h-3 rounded ${epic.color}`} style={{ width: epic.name === "Authentication" ? "70%" : "45%" }} /></div><div className="mt-2 flex flex-wrap gap-2">{tasks.filter((task) => task.epic === epic.name).map((task) => <span key={task.id} className="rounded bg-slate-50 px-2 py-1 text-xs">{task.id}</span>)}</div></div>)}</div></section>; }
 function Calendar({ tasks }: { tasks: Task[] }) { return <section className="rounded-md border border-slate-200 bg-white p-4"><h3 className="font-semibold">Calendar Agenda</h3><div className="mt-4 grid gap-2 md:grid-cols-2">{tasks.map((task) => <div key={task.id} className="rounded-md border border-slate-200 p-3 text-sm"><Milestone className="mr-2 inline text-iris" size={15} /><span className="font-medium">{task.due}</span> - {task.id} {task.title}</div>)}</div></section>; }
-function AIAssistant({ tasks, breakdown }: { tasks: Task[]; breakdown: string[] }) { const dated = tasks.filter((task) => task.status !== "Done"); const risks = tasks.filter((task) => task.priority === "Urgent" || task.priority === "High"); return <section className="grid gap-4 lg:grid-cols-[1fr_360px]"><div className="rounded-md border border-slate-200 bg-white p-4"><div className="flex items-center gap-2"><Bot className="text-iris" size={20} /><h3 className="font-semibold">AI Project Manager</h3></div><div className="mt-4 space-y-3 text-sm"><div className="rounded-md bg-slate-50 p-3"><p className="font-medium">What is happening with Project ECOM?</p></div><div className="rounded-md border border-slate-200 p-3 leading-6 text-slate-700">Sprint Alpha is moving, but authentication is carrying delivery risk. I found {risks.length} high-priority items and {dated.length} dated active items. I would resolve ECOM-2 before expanding Sprint Beta scope.</div></div><div className="mt-4 rounded-md border border-slate-200 p-3"><p className="text-sm font-semibold">Tool evidence</p><div className="mt-2 grid gap-2 text-xs text-slate-600 md:grid-cols-3"><span className="rounded bg-slate-50 px-2 py-1">getTasks: {tasks.length} tasks</span><span className="rounded bg-slate-50 px-2 py-1">getBlockedTasks: 1 task</span><span className="rounded bg-slate-50 px-2 py-1">getWorkload: 4 members</span></div></div></div><div className="space-y-4"><div className="rounded-md border border-slate-200 bg-white p-4"><h3 className="font-semibold">Task breakdown draft</h3><div className="mt-3 space-y-2 text-sm text-slate-700">{breakdown.map((item) => <p key={item} className="rounded bg-slate-50 p-2"><CheckCircle2 className="mr-2 inline text-mint" size={15} />{item}</p>)}</div><button className="mt-4 w-full rounded-md bg-ink px-3 py-2 text-sm font-medium text-white">Create selected tasks</button></div><div className="rounded-md border border-slate-200 bg-white p-4"><h3 className="font-semibold">Plan with AI</h3><p className="mt-2 text-sm leading-6 text-slate-700">Generated plans are saved as proposals first. Users approve before epics, stories, or tasks are created.</p></div></div></section>; }
+function AIAssistant({ tasks, breakdown }: { tasks: Task[]; breakdown: string[] }) {
+  const active = tasks.filter((task) => task.status !== "Done");
+  const risks = tasks.filter((task) => task.priority === "Urgent" || task.priority === "High");
+  const blocked = tasks.filter((task) => task.id === "ECOM-2");
+  const completedPoints = tasks.filter((task) => task.status === "Done").reduce((sum, task) => sum + task.points, 0);
+  const totalPoints = tasks.reduce((sum, task) => sum + task.points, 0);
+
+  return (
+    <section className="grid gap-4 lg:grid-cols-[1fr_360px]">
+      <div className="space-y-4">
+        <div className="rounded-md border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2">
+            <Bot className="text-iris" size={20} />
+            <h3 className="font-semibold">AI Project Manager</h3>
+          </div>
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="rounded-md bg-slate-50 p-3"><p className="font-medium">Will we finish Sprint Alpha on time?</p></div>
+            <div className="rounded-md border border-slate-200 p-3 leading-6 text-slate-700">
+              Sprint Alpha is {Math.round((completedPoints / Math.max(totalPoints, 1)) * 100)}% complete by story points. Delivery needs attention because {risks.length} high-priority items remain and ECOM-2 is treated as the main blocker.
+            </div>
+          </div>
+          <div className="mt-4 rounded-md border border-slate-200 p-3">
+            <p className="text-sm font-semibold">Tool evidence</p>
+            <div className="mt-2 grid gap-2 text-xs text-slate-600 md:grid-cols-3">
+              <span className="rounded bg-slate-50 px-2 py-1">getTasks: {tasks.length} tasks</span>
+              <span className="rounded bg-slate-50 px-2 py-1">getBlockedTasks: {blocked.length} task</span>
+              <span className="rounded bg-slate-50 px-2 py-1">getWorkload: 4 members</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <article className="rounded-md border border-slate-200 bg-white p-4">
+            <h3 className="font-semibold">Project health</h3>
+            <p className="mt-3 text-2xl font-semibold text-coral">At Risk</p>
+            <p className="mt-2 text-sm text-slate-600">{active.length} active tasks, {risks.length} high-priority, 1 blocker. Health is calculated first, then explained.</p>
+          </article>
+          <article className="rounded-md border border-slate-200 bg-white p-4">
+            <h3 className="font-semibold">AI prioritize</h3>
+            <div className="mt-3 space-y-2 text-sm">
+              {risks.slice(0, 3).map((task) => <p key={task.id} className="rounded bg-slate-50 p-2"><Flag className="mr-2 inline text-coral" size={14} />{task.id} - {task.title}</p>)}
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="rounded-md border border-slate-200 bg-white p-4">
+          <h3 className="font-semibold">Daily standup</h3>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <p><span className="font-medium">Yesterday:</span> ECOM-5 completed.</p>
+            <p><span className="font-medium">Today:</span> ECOM-1 and ECOM-2.</p>
+            <p><span className="font-medium">Blockers:</span> OAuth credentials for ECOM-2.</p>
+          </div>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-white p-4">
+          <h3 className="font-semibold">Sprint summary</h3>
+          <p className="mt-2 text-sm text-slate-700">Velocity: {completedPoints} pts. Remaining: {Math.max(totalPoints - completedPoints, 0)} pts.</p>
+          <p className="mt-2 text-sm text-slate-700">Suggested action: clear blockers before accepting new scope.</p>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-white p-4">
+          <h3 className="font-semibold">Retrospective draft</h3>
+          <p className="mt-2 text-sm text-slate-700">Improve by escalating blocked urgent work within one day and splitting large security tasks earlier.</p>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-white p-4">
+          <h3 className="font-semibold">Task breakdown draft</h3>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">{breakdown.map((item) => <p key={item} className="rounded bg-slate-50 p-2"><CheckCircle2 className="mr-2 inline text-mint" size={15} />{item}</p>)}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function TaskPanel({ task, addComment }: { task: Task; addComment: () => void }) { return <section className="rounded-md border border-slate-200 bg-white p-4"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-500">{task.id}</p><h3 className="mt-1 font-semibold">{task.title}</h3></div><button className="rounded-md border border-slate-200 p-2"><X size={16} /></button></div><p className="mt-3 text-sm leading-6 text-slate-700">{task.description}</p><div className="mt-4 grid grid-cols-2 gap-2 text-sm"><Info label="Status" value={task.status} /><Info label="Priority" value={task.priority} /><Info label="Sprint" value={task.sprint ?? "Backlog"} /><Info label="Epic" value={task.epic ?? "None"} /></div><div className="mt-4 flex flex-wrap gap-2">{task.labels.map((label) => <span key={label} className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">{label}</span>)}</div><button onClick={addComment} className="mt-4 w-full rounded-md bg-ink px-3 py-2 text-sm font-medium text-white"><MessageSquare className="mr-1 inline" size={16} /> Add comment</button><div className="mt-4 space-y-2">{task.comments.map((comment) => <p key={comment} className="rounded-md bg-slate-50 p-2 text-sm text-slate-700">{comment}</p>)}</div></section>; }
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-md border border-slate-200 p-2"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 font-medium">{value}</p></div>; }
+

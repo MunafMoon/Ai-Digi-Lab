@@ -1,27 +1,26 @@
-# Phase 4 Completion
+# Phase 5 Completion
 
-Status: Phase 4 AI infrastructure and first AI assistant workflows implemented.
+Status: Phase 5 AI project-management workflows implemented.
 
 Completed:
 
-- AI provider abstraction with OpenAI-compatible chat support and local deterministic fallback when no API key is configured.
-- Permission-aware workspace context tool that scopes project/task/member data through organization membership.
-- AI chat endpoint that stores conversations, messages, tool-call evidence, and AI usage records.
-- AI project planning endpoint that returns an editable proposal and stores it as an AI action requiring approval.
-- AI task breakdown endpoint that returns structured proposed tasks without mutating project data.
-- Project task draft endpoint for natural-language task generation, also saved as a proposed AI action.
-- Deterministic AI helpers for project plans and task breakdowns with unit coverage.
-- Frontend AI Assistant tab showing chat-style output, tool evidence, task breakdown draft, and approval-first plan messaging.
+- AI prioritization helper and `/api/ai/prioritize` endpoint with approval-required recommendations.
+- Deterministic project health calculation and `/api/ai/project-health` endpoint.
+- AI standup generation and `/api/ai/standup` endpoint.
+- AI sprint summary generation and `/api/ai/sprint-summary` endpoint.
+- AI retrospective generation and `/api/ai/retrospective` endpoint.
+- Frontend AI Assistant expanded with project health, prioritization, daily standup, sprint summary, and retrospective panels.
+- Unit tests for Phase 5 deterministic AI workflows.
 
 Verification performed:
 
 - `npx prisma generate --schema server/prisma/schema.prisma` passed.
-- `npm run test` passed: 4 files, 9 tests.
+- `npm run test` passed: 5 files, 14 tests.
 - `npm run typecheck` passed.
 - `npm run build` passed.
 
 Known follow-up:
 
-- AI endpoints are ready for live provider use via `OPENAI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL`, but were verified with the local deterministic fallback.
-- Approval application endpoints are still needed to turn AIAction proposals into real tasks/epics after user confirmation.
-- Frontend AI Assistant currently displays local demo state; API integration with TanStack Query remains the next hardening step.
+- Frontend Phase 5 panels still use local demo state; wire them to the new API endpoints with TanStack Query.
+- AI approval application endpoints are still needed to apply accepted prioritization/task proposals.
+- Live backend hosting is still required for GitHub Pages to call real APIs.

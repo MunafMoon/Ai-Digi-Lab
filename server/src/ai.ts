@@ -93,3 +93,102 @@ export async function getPermittedWorkspaceContext(prisma: PrismaClient, organiz
   ]);
   return { projects, overdueTasks, blockedTasks, members };
 }
+
+export type PriorityInputTask = {
+  taskKey: string;
+  title: string;
+  priority: "URGENT" | "HIGH" | "MEDIUM" | "LOW" | "NO_PRIORITY";
+  status: string;
+  blocked?: boolean;
+  dueDate?: Date | string | null;
+  storyPoints?: number | null;
+  createdAt?: Date | string | null;
+};
+
+export type ProjectHealthTask = PriorityInputTask;
+
+const priorityScore: Record<PriorityInputTask["priority"], number> = {
+  URGENT: 40,
+  HIGH: 30,
+  MEDIUM: 18,
+  LOW: 8,
+  NO_PRIORITY: 0
+};
+
+export function prioritizeTasks(tasks: PriorityInputTask[], now = new Date()) {
+  return tasks
+    .map((task) => {
+      const due = task.dueDate ? new Date(task.dueDate) : null;
+      const daysUntilDue = due ? Math.ceil((due.getTime() - now.getTime()) / 86400000) : null;
+      const overdueScore = daysUntilDue !== null && daysUntilDue < 0 ? 35 : 0;
+      const nearDueScore = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 2 ? 20 : 0;
+      const blockedScore = task.blocked ? 25 : 0;
+      const effortScore = Math.min(task.storyPoints ?? 0, 13);
+      const score = priorityScore[task.priority] + overdueScore + nearDueScore + blockedScore + effortScore;
+      const suggestedPriority = score >= 75 ? "URGENT" : score >= 50 ? "HIGH" : score >= 25 ? "MEDIUM" : "LOW";
+      const reasons = [
+        task.blocked ? "blocked" : null,
+        overdueScore ? "overdue" : null,
+        nearDueScore ? "due soon" : null,
+        task.priority !== "NO_PRIORITY" ? `current priority ${task.priority}` : "not prioritized",
+        effortScore >= 8 ? "large estimate" : null
+      ].filter(Boolean) as string[];
+      return { taskKey: task.taskKey, title: task.title, currentPriority: task.priority, suggestedPriority, score, reason: reasons.join(", ") };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+export function calculateProjectHealth(tasks: ProjectHealthTask[], now = new Date()) {
+  const activeTasks = tasks.filter((task) => task.status !== "Done");
+  const overdueTasks = activeTasks.filter((task) => task.dueDate && new Date(task.dueDate).getTime() < now.getTime());
+  const blockedTasks = activeTasks.filter((task) => task.blocked);
+  const urgentTasks = activeTasks.filter((task) => task.priority === "URGENT");
+  const unestimatedTasks = activeTasks.filter((task) => !task.storyPoints);
+  const completionPercent = tasks.length === 0 ? 0 : Math.round((tasks.filter((task) => task.status === "Done").length / tasks.length) * 100);
+  const overdueRatio = activeTasks.length === 0 ? 0 : overdueTasks.length / activeTasks.length;
+  const blockedRatio = activeTasks.length === 0 ? 0 : blockedTasks.length / activeTasks.length;
+  const riskScore = Math.round(overdueRatio * 45 + blockedRatio * 35 + urgentTasks.length * 8 + unestimatedTasks.length * 3);
+  const health = riskScore >= 50 ? "At Risk" : riskScore >= 20 ? "Attention" : "Healthy";
+  const explanation = `${health}: ${overdueTasks.length} overdue, ${blockedTasks.length} blocked, ${urgentTasks.length} urgent, ${completionPercent}% complete.`;
+  return { health, riskScore, metrics: { totalTasks: tasks.length, activeTasks: activeTasks.length, overdueTasks: overdueTasks.length, blockedTasks: blockedTasks.length, urgentTasks: urgentTasks.length, unestimatedTasks: unestimatedTasks.length, completionPercent }, explanation };
+}
+
+export function createStandup(tasks: PriorityInputTask[], userName = "Team member") {
+  const done = tasks.filter((task) => task.status === "Done").slice(0, 5);
+  const active = tasks.filter((task) => ["Todo", "In Progress", "In Review", "QA"].includes(task.status)).slice(0, 5);
+  const blockers = tasks.filter((task) => task.blocked).slice(0, 5);
+  return {
+    user: userName,
+    yesterday: done.map((task) => `${task.taskKey} ${task.title}`),
+    today: active.map((task) => `${task.taskKey} ${task.title}`),
+    blockers: blockers.map((task) => `${task.taskKey} ${task.title}`)
+  };
+}
+
+export function createSprintSummary(tasks: PriorityInputTask[], sprintName = "Sprint") {
+  const completed = tasks.filter((task) => task.status === "Done");
+  const incomplete = tasks.filter((task) => task.status !== "Done");
+  const pointsDone = completed.reduce((sum, task) => sum + (task.storyPoints ?? 0), 0);
+  const pointsTotal = tasks.reduce((sum, task) => sum + (task.storyPoints ?? 0), 0);
+  return {
+    sprintName,
+    completedWork: completed.map((task) => `${task.taskKey} ${task.title}`),
+    incompleteWork: incomplete.map((task) => `${task.taskKey} ${task.title}`),
+    velocity: pointsDone,
+    remainingStoryPoints: pointsTotal - pointsDone,
+    risks: incomplete.filter((task) => task.priority === "URGENT" || task.blocked).map((task) => `${task.taskKey} ${task.title}`),
+    suggestedActions: ["Review carry-over work", "Resolve blockers first", "Avoid adding scope until urgent tasks are clear"]
+  };
+}
+
+export function createRetrospective(tasks: PriorityInputTask[]) {
+  const blocked = tasks.filter((task) => task.blocked);
+  const completed = tasks.filter((task) => task.status === "Done");
+  const carryOver = tasks.filter((task) => task.status !== "Done");
+  return {
+    wentWell: completed.length ? [`Completed ${completed.length} tasks`] : ["Team maintained sprint visibility"],
+    delays: blocked.length ? blocked.map((task) => `${task.taskKey} was blocked`) : ["No repeated blocker pattern detected"],
+    carryOver: carryOver.map((task) => `${task.taskKey} ${task.title}`),
+    improvements: ["Break down large tasks earlier", "Escalate blocked urgent work within one day", "Keep acceptance criteria attached to each task"]
+  };
+}

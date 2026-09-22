@@ -85,3 +85,9 @@ Phase 2 now includes project CRUD, task CRUD, comments, activity logs, tenant-sc
 - POST /api/ai/chat`n- POST /api/ai/plan`n- POST /api/ai/task-breakdown`n- POST /api/projects/:projectId/ai/task-draft`n
 AI provider settings use OPENAI_API_KEY, AI_BASE_URL, and AI_MODEL. Without an API key, the server uses a deterministic local fallback so development remains usable offline.
 
+
+## Phase 5 API Highlights
+
+- POST /api/ai/prioritize`n- POST /api/ai/project-health`n- POST /api/ai/standup`n- POST /api/ai/sprint-summary`n- POST /api/ai/retrospective`n
+Project health and prioritization use deterministic metrics first, then present AI-style explanations and editable recommendations. No important project data is silently changed.
+

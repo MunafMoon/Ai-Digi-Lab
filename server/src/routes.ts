@@ -5,7 +5,7 @@ import { hashPassword, hashToken, signAccessToken, signRefreshToken, verifyPassw
 import { prisma } from "./db.js";
 import { requireAuth, requireOrganization } from "./middleware.js";
 import { hasRole } from "./rbac.js";
-import { AIProvider, createProjectPlan, createTaskBreakdown, getPermittedWorkspaceContext } from "./ai.js";
+import { AIProvider, calculateProjectHealth, createProjectPlan, createRetrospective, createSprintSummary, createStandup, createTaskBreakdown, getPermittedWorkspaceContext, prioritizeTasks } from "./ai.js";
 
 export const router = Router();
 
@@ -417,3 +417,65 @@ router.post("/projects/:projectId/ai/task-draft", requireAuth, async (req, res, 
   } catch (error) { next(error); }
 });
 
+
+
+function serializePhase5Task(task: { taskKey: string; title: string; priority: TaskPriority; status: string; blocked: boolean; dueDate: Date | null; storyPoints: number | null; createdAt: Date }) {
+  return { taskKey: task.taskKey, title: task.title, priority: task.priority, status: task.status, blocked: task.blocked, dueDate: task.dueDate, storyPoints: task.storyPoints, createdAt: task.createdAt };
+}
+
+router.post("/ai/prioritize", requireAuth, requireOrganization("VIEWER"), async (req, res, next) => {
+  try {
+    const input = z.object({ projectId: z.string().uuid().optional() }).parse(req.body);
+    const where = input.projectId ? { projectId: input.projectId, organizationId: req.membership!.organizationId } : { organizationId: req.membership!.organizationId };
+    if (input.projectId && !(await requireProjectAccess(input.projectId, req.user!.id))) return res.status(404).json({ error: "Project not found" });
+    const tasks = await prisma.task.findMany({ where, orderBy: [{ dueDate: "asc" }, { priority: "asc" }], take: 100 });
+    const recommendations = prioritizeTasks(tasks.map(serializePhase5Task));
+    const proposal = { projectId: input.projectId ?? null, recommendations };
+    const action = await prisma.aIAction.create({ data: { organizationId: req.membership!.organizationId, userId: req.user!.id, feature: "prioritization", proposal: proposal as unknown as Prisma.InputJsonValue, status: "PROPOSED" } });
+    res.json({ actionId: action.id, recommendations, confirmationRequired: true });
+  } catch (error) { next(error); }
+});
+
+router.post("/ai/project-health", requireAuth, requireOrganization("VIEWER"), async (req, res, next) => {
+  try {
+    const input = z.object({ projectId: z.string().uuid() }).parse(req.body);
+    const project = await requireProjectAccess(input.projectId, req.user!.id);
+    if (!project || project.organizationId !== req.membership!.organizationId) return res.status(404).json({ error: "Project not found" });
+    const tasks = await prisma.task.findMany({ where: { projectId: project.id, organizationId: project.organizationId } });
+    const health = calculateProjectHealth(tasks.map(serializePhase5Task));
+    await prisma.aIUsage.create({ data: { organizationId: project.organizationId, userId: req.user!.id, feature: "project_health", model: "deterministic", inputTokens: tasks.length, outputTokens: Math.ceil(JSON.stringify(health).length / 4), estimatedCostCents: 0 } });
+    res.json({ project: { id: project.id, key: project.key, name: project.name }, health });
+  } catch (error) { next(error); }
+});
+
+router.post("/ai/standup", requireAuth, requireOrganization("VIEWER"), async (req, res, next) => {
+  try {
+    const input = z.object({ projectId: z.string().uuid().optional(), userId: z.string().uuid().optional() }).parse(req.body);
+    const where = { organizationId: req.membership!.organizationId, ...(input.projectId ? { projectId: input.projectId } : {}), ...(input.userId ? { assigneeId: input.userId } : { assigneeId: req.user!.id }) };
+    if (input.projectId && !(await requireProjectAccess(input.projectId, req.user!.id))) return res.status(404).json({ error: "Project not found" });
+    const tasks = await prisma.task.findMany({ where, orderBy: { updatedAt: "desc" }, take: 50 });
+    const user = await prisma.user.findUnique({ where: { id: input.userId ?? req.user!.id }, select: { name: true } });
+    const standup = createStandup(tasks.map(serializePhase5Task), user?.name ?? "Team member");
+    res.json({ standup, editable: true });
+  } catch (error) { next(error); }
+});
+
+router.post("/ai/sprint-summary", requireAuth, requireOrganization("VIEWER"), async (req, res, next) => {
+  try {
+    const input = z.object({ sprintId: z.string().uuid() }).parse(req.body);
+    const sprint = await prisma.sprint.findFirst({ where: { id: input.sprintId, organizationId: req.membership!.organizationId, project: { organization: { members: { some: { userId: req.user!.id } } } } }, include: { tasks: true } });
+    if (!sprint) return res.status(404).json({ error: "Sprint not found" });
+    const summary = createSprintSummary(sprint.tasks.map(serializePhase5Task), sprint.name);
+    res.json({ sprint: { id: sprint.id, name: sprint.name, status: sprint.status }, summary });
+  } catch (error) { next(error); }
+});
+
+router.post("/ai/retrospective", requireAuth, requireOrganization("VIEWER"), async (req, res, next) => {
+  try {
+    const input = z.object({ sprintId: z.string().uuid() }).parse(req.body);
+    const sprint = await prisma.sprint.findFirst({ where: { id: input.sprintId, organizationId: req.membership!.organizationId, project: { organization: { members: { some: { userId: req.user!.id } } } } }, include: { tasks: true } });
+    if (!sprint) return res.status(404).json({ error: "Sprint not found" });
+    const retrospective = createRetrospective(sprint.tasks.map(serializePhase5Task));
+    res.json({ sprint: { id: sprint.id, name: sprint.name }, retrospective });
+  } catch (error) { next(error); }
+});
